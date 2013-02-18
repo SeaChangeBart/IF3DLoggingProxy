@@ -18,11 +18,12 @@ namespace Logging3DproxyApp
             return new[] {prefix};
         }
 
-        public ProxyHandler(short port, string resource, string endPoint, string logPath)
+        public ProxyHandler(short port, string resource, string endPoint, string logPath, Action<string> trace)
             : base(Prefixes(port, resource))
         {
             m_EndPoint = endPoint;
             m_LogPath = logPath;
+            m_Trace = trace;
             if (!Directory.Exists(m_LogPath))
                 Directory.CreateDirectory(m_LogPath);
             m_SharedLogFile = Path.Combine(m_LogPath, resource + ".log");
@@ -32,9 +33,12 @@ namespace Logging3DproxyApp
         {
             var httpListenerRequest = context.Request;
             var contentId = httpListenerRequest.Url.Segments.Last();
+            if (contentId.Equals("Status", StringComparison.InvariantCultureIgnoreCase))
+                contentId = httpListenerRequest.Url.Segments.Reverse().Skip(1).First().Replace("/", "");
+
             try
             {
-                Console.WriteLine(httpListenerRequest.Url.PathAndQuery);
+                m_Trace(httpListenerRequest.Url.PathAndQuery);
                 var actualResource = string.Concat(httpListenerRequest.Url.Segments.Skip(2));
                 var urlToCall = m_EndPoint + actualResource;
 
@@ -48,10 +52,10 @@ namespace Logging3DproxyApp
                 var requestBody = new MemoryStream();
                 if (httpListenerRequest.HasEntityBody)
                 {
-                    Console.WriteLine("Copying stream");
+                    m_Trace("Copying stream");
                     httpListenerRequest.InputStream.CopyTo(requestBody);
                     requestBody.Seek(0, SeekOrigin.Begin);
-                    Console.WriteLine("Copying stream 2");
+                    m_Trace("Copying stream 2");
                     requestBody.CopyTo(webRequest.GetRequestStream());
                 }
 
@@ -60,12 +64,12 @@ namespace Logging3DproxyApp
                     HttpWebResponse webResponse;
                     try
                     {
-                        Console.WriteLine("Calling");
+                        m_Trace("Calling");
                         webResponse = (HttpWebResponse) webRequest.GetResponse();
                     }
                     catch (WebException webEx)
                     {
-                        Console.WriteLine("WebEx");
+                        m_Trace("WebEx");
                         webResponse = (HttpWebResponse) webEx.Response;
                         if (webResponse == null)
                             throw;
@@ -129,6 +133,8 @@ namespace Logging3DproxyApp
         }
 
         static readonly char[] OngewensteFiguren = new[] { '\r', '\t', '\n' };
+        private readonly Action<string> m_Trace;
+
         private static string TsvCompatible(string rawString)
         {
             var retVal = rawString;
@@ -148,7 +154,7 @@ namespace Logging3DproxyApp
                 var perContentLogFile = Path.Combine(m_LogPath, contentId + ".log");
                 File.AppendAllText(perContentLogFile, timedLogLine);
                 File.AppendAllText(m_SharedLogFile, timedLogLine);
-                Console.WriteLine(logLine);
+                m_Trace(logLine);
             }
         }
     }
