@@ -98,6 +98,7 @@ namespace Logging3DproxyApp
                 {
                     Log(contentId, httpListenerRequest.HttpMethod, context.Request.Url, requestBody,
                         "Exception", e.Message);
+                    context.Response.StatusCode = 503;
                 }
                 context.Response.OutputStream.Close();
                 context.Response.Close();
