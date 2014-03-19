@@ -27,7 +27,10 @@ namespace Logging3DproxyApp
             if (!Directory.Exists(m_LogPath))
                 Directory.CreateDirectory(m_LogPath);
             m_SharedLogFile = Path.Combine(m_LogPath, resource + ".log");
+            TimeoutInSeconds = 10;
         }
+
+        public int TimeoutInSeconds { get; set; }
 
         protected override void DoHandleRequest(HttpListenerContext context)
         {
@@ -43,7 +46,7 @@ namespace Logging3DproxyApp
                 var urlToCall = m_EndPoint + actualResource;
 
                 var webRequest = WebRequest.Create(urlToCall);
-                webRequest.Timeout = 10000;
+                webRequest.Timeout = TimeoutInSeconds * 1000;
                 webRequest.Method = httpListenerRequest.HttpMethod;
 
                 webRequest.ContentLength = httpListenerRequest.ContentLength64;

@@ -17,6 +17,8 @@ namespace Logging3DproxyApp
                                           Properties.Settings.Default.EndPoint2,
                                           Path.Combine(Properties.Settings.Default.LogPath,
                                                        Properties.Settings.Default.Resource2), traceFn);
+            m_Handler1.TimeoutInSeconds = Properties.Settings.Default.TimeoutInSeconds;
+            m_Handler1.TimeoutInSeconds = Properties.Settings.Default.TimeoutInSeconds;
         }
         public void Start()
         {

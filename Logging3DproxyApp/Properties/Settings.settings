@@ -20,5 +20,8 @@
     <Setting Name="LogPath" Type="System.String" Scope="User">
       <Value Profile="(Default)">d:\Logs\Proxy3D</Value>
     </Setting>
+    <Setting Name="TimeoutInSeconds" Type="System.Int32" Scope="User">
+      <Value Profile="(Default)">10</Value>
+    </Setting>
   </Settings>
 </SettingsFile>
