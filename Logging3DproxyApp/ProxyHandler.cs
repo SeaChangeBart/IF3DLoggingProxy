@@ -28,6 +28,7 @@ namespace Logging3DproxyApp
                 Directory.CreateDirectory(m_LogPath);
             m_SharedLogFile = Path.Combine(m_LogPath, resource + ".log");
             TimeoutInSeconds = 10;
+            StatusCodeOnTimeout = 503;
         }
 
         public int TimeoutInSeconds { get; set; }
@@ -101,7 +102,7 @@ namespace Logging3DproxyApp
                 {
                     Log(contentId, httpListenerRequest.HttpMethod, context.Request.Url, requestBody,
                         "Exception", e.Message);
-                    context.Response.StatusCode = 503;
+                    context.Response.StatusCode = StatusCodeOnTimeout;
                 }
                 context.Response.OutputStream.Close();
                 context.Response.Close();
@@ -138,6 +139,7 @@ namespace Logging3DproxyApp
 
         static readonly char[] OngewensteFiguren = new[] { '\r', '\t', '\n' };
         private readonly Action<string> m_Trace;
+        public int StatusCodeOnTimeout { get; set; }
 
         private static string TsvCompatible(string rawString)
         {

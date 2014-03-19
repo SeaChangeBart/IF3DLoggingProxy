@@ -106,5 +106,17 @@ namespace Logging3DproxyApp.Properties {
                 this["TimeoutInSeconds"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("503")]
+        public int StatusCodeOnTimeout {
+            get {
+                return ((int)(this["StatusCodeOnTimeout"]));
+            }
+            set {
+                this["StatusCodeOnTimeout"] = value;
+            }
+        }
     }
 }

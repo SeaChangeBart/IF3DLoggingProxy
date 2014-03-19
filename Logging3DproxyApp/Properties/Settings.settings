@@ -23,5 +23,8 @@
     <Setting Name="TimeoutInSeconds" Type="System.Int32" Scope="User">
       <Value Profile="(Default)">10</Value>
     </Setting>
+    <Setting Name="StatusCodeOnTimeout" Type="System.Int32" Scope="User">
+      <Value Profile="(Default)">503</Value>
+    </Setting>
   </Settings>
 </SettingsFile>
