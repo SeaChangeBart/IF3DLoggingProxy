@@ -118,7 +118,7 @@ namespace Logging3DproxyApp
         private void Log(string contentId, string method, Uri url, MemoryStream requestBody, int statusCode,
                          MemoryStream responseBody)
         {
-            var responseBodyString = TsvCompatible(Encoding.UTF8.GetString(responseBody.GetBuffer()));
+            var responseBodyString = TsvCompatible(Encoding.UTF8.GetString(responseBody.ToArray()));
             var statusCodeString = string.Format("HTTP {0}", statusCode);
             Log( contentId, method, url, requestBody, statusCodeString, responseBodyString);
         }
@@ -126,7 +126,7 @@ namespace Logging3DproxyApp
         private void Log(string contentId, string method, Uri url, MemoryStream requestBody, string statusCodeString,
                          string responseBodyString)
         {
-            var requestBodyString = TsvCompatible(Encoding.UTF8.GetString(requestBody.GetBuffer()));
+            var requestBodyString = TsvCompatible(Encoding.UTF8.GetString(requestBody.ToArray()));
             var requestString = url.PathAndQuery;
 
             var logLine = string.Format("{0}\t{1}\t{2}\t{3}\t{4}\t{5}", contentId, method, requestString,
