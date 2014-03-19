@@ -4,6 +4,10 @@ IF3DLoggingProxy
 IF3DLoggingProxy. Says it all.
 
 ## Changelog
+### 1.0.1.2
+* Fix: The per-day logfile feature never got committed to source control and was gone. Built-in again.
+* Wrapped log writing in try/catch for improved reliability
+
 ### 1.0.1.1
 Fix: Settings weren't used for handler #2.
 

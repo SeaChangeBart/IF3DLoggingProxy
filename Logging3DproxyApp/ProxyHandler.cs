@@ -11,7 +11,7 @@ namespace Logging3DproxyApp
     {
         private readonly string m_EndPoint;
         private readonly string m_LogPath;
-        private readonly string m_SharedLogFile;
+        private readonly string m_SharedLogFileTemplate;
 
         private static string[] Prefixes(short port, string resource)
         {
@@ -27,7 +27,7 @@ namespace Logging3DproxyApp
             m_Trace = trace;
             if (!Directory.Exists(m_LogPath))
                 Directory.CreateDirectory(m_LogPath);
-            m_SharedLogFile = Path.Combine(m_LogPath, resource + ".log");
+            m_SharedLogFileTemplate = Path.Combine(m_LogPath, resource + "_{0:yyyyMMdd}.log");
             TimeoutInSeconds = 10;
             StatusCodeOnTimeout = 503;
         }
@@ -164,9 +164,34 @@ namespace Logging3DproxyApp
                 var timeString = time.ToString("o");
                 var timedLogLine = string.Format("{0}\t{1}\r\n", timeString, logLine);
                 var perContentLogFile = Path.Combine(m_LogPath, contentId + ".log");
-                File.AppendAllText(perContentLogFile, timedLogLine);
-                File.AppendAllText(m_SharedLogFile, timedLogLine);
+                var perDayLogFile = string.Format(m_SharedLogFileTemplate, time);
+                TryRetry(() => File.AppendAllText(perContentLogFile, timedLogLine), 3);
+                TryRetry(() => File.AppendAllText(perDayLogFile, timedLogLine), 3);
                 m_Trace(logLine);
+            }
+        }
+
+        private bool TryRetry(Action what, int howOften)
+        {
+            for (var i = 0; i <= howOften; i++)
+            {
+                if (Try(what))
+                    return true;
+                System.Threading.Thread.Sleep(25);
+            }
+            return false;
+        }
+
+        private bool Try(Action what)
+        {
+            try
+            {
+                what();
+                return true;
+            }
+            catch (Exception e)
+            {
+                return false;
             }
         }
     }
