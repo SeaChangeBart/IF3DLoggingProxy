@@ -21,13 +21,13 @@ namespace Logging3DproxyApp
             if (Properties.Settings.Default.TimeoutInSeconds > 0)
             {
                 m_Handler1.TimeoutInSeconds = Properties.Settings.Default.TimeoutInSeconds;
-                m_Handler1.TimeoutInSeconds = Properties.Settings.Default.TimeoutInSeconds;
+                m_Handler2.TimeoutInSeconds = Properties.Settings.Default.TimeoutInSeconds;
             }
 
             if (Properties.Settings.Default.StatusCodeOnTimeout > 0)
             {
                 m_Handler1.StatusCodeOnTimeout = Properties.Settings.Default.StatusCodeOnTimeout;
-                m_Handler1.StatusCodeOnTimeout = Properties.Settings.Default.StatusCodeOnTimeout;
+                m_Handler2.StatusCodeOnTimeout = Properties.Settings.Default.StatusCodeOnTimeout;
             }
         }
         public void Start()
