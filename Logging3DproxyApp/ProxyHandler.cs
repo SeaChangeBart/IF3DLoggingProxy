@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -63,6 +64,9 @@ namespace Logging3DproxyApp
                     requestBody.CopyTo(webRequest.GetRequestStream());
                 }
 
+                var stopWatch = new Stopwatch();
+                stopWatch.Start();
+
                 try
                 {
                     HttpWebResponse webResponse;
@@ -93,15 +97,18 @@ namespace Logging3DproxyApp
                         responseStream.Close();
                     }
 
+                    stopWatch.Stop();
+
                     Log(contentId, httpListenerRequest.HttpMethod, context.Request.Url, requestBody,
-                        context.Response.StatusCode, responseBody);
+                        context.Response.StatusCode, responseBody, (int)stopWatch.ElapsedMilliseconds);
 
                     webResponse.Close();
                 }
                 catch (Exception e)
                 {
+                    stopWatch.Stop();
                     Log(contentId, httpListenerRequest.HttpMethod, context.Request.Url, requestBody,
-                        "Exception", e.Message);
+                        "Exception", e.Message, (int)stopWatch.ElapsedMilliseconds);
                     context.Response.StatusCode = StatusCodeOnTimeout;
                 }
                 context.Response.OutputStream.Close();
@@ -116,28 +123,26 @@ namespace Logging3DproxyApp
             }
         }
 
-        private void Log(string contentId, string method, Uri url, MemoryStream requestBody, int statusCode,
-                         MemoryStream responseBody)
+        private void Log(string contentId, string method, Uri url, MemoryStream requestBody, int statusCode, MemoryStream responseBody, int responseTimeMs)
         {
             var responseBodyString = TsvCompatible(Encoding.UTF8.GetString(responseBody.ToArray()));
             var statusCodeString = string.Format("HTTP {0}", statusCode);
-            Log( contentId, method, url, requestBody, statusCodeString, responseBodyString);
+            Log(contentId, method, url, requestBody, statusCodeString, responseBodyString, responseTimeMs);
         }
 
-        private void Log(string contentId, string method, Uri url, MemoryStream requestBody, string statusCodeString,
-                         string responseBodyString)
+        private void Log(string contentId, string method, Uri url, MemoryStream requestBody, string statusCodeString, string responseBodyString, int responseTimeMs)
         {
             var requestBodyString = TsvCompatible(Encoding.UTF8.GetString(requestBody.ToArray()));
             var requestString = url.PathAndQuery;
 
-            var logLine = string.Format("{0}\t{1}\t{2}\t{3}\t{4}\t{5}", contentId, method, requestString,
+            var logLine = string.Format("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}ms", contentId, method, requestString,
                                         requestBodyString,
-                                        statusCodeString, responseBodyString);
+                                        statusCodeString, responseBodyString, responseTimeMs);
 
             Log(contentId, logLine);
         }
 
-        static readonly char[] OngewensteFiguren = new[] { '\r', '\t', '\n' };
+        static readonly char[] OngewensteFiguren = { '\r', '\t', '\n' };
         private readonly Action<string> m_Trace;
         public int StatusCodeOnTimeout { get; set; }
 
