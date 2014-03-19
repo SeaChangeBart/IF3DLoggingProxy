@@ -36,6 +36,7 @@ namespace Logging3DproxyApp
 
         protected override void DoHandleRequest(HttpListenerContext context)
         {
+            var startTime = DateTime.UtcNow;
             var httpListenerRequest = context.Request;
             var contentId = httpListenerRequest.Url.Segments.Last();
             if (contentId.Equals("Status", StringComparison.InvariantCultureIgnoreCase))
@@ -99,7 +100,7 @@ namespace Logging3DproxyApp
 
                     stopWatch.Stop();
 
-                    Log(contentId, httpListenerRequest.HttpMethod, context.Request.Url, requestBody,
+                    Log(startTime, contentId, httpListenerRequest.HttpMethod, context.Request.Url, requestBody,
                         context.Response.StatusCode, responseBody, (int)stopWatch.ElapsedMilliseconds);
 
                     webResponse.Close();
@@ -107,7 +108,7 @@ namespace Logging3DproxyApp
                 catch (Exception e)
                 {
                     stopWatch.Stop();
-                    Log(contentId, httpListenerRequest.HttpMethod, context.Request.Url, requestBody,
+                    Log(startTime, contentId, httpListenerRequest.HttpMethod, context.Request.Url, requestBody,
                         "Exception", e.Message, (int)stopWatch.ElapsedMilliseconds);
                     context.Response.StatusCode = StatusCodeOnTimeout;
                 }
@@ -116,21 +117,21 @@ namespace Logging3DproxyApp
             }
             catch (Exception e)
             {
-                Log(contentId, "Exception handling request: " + e.Message);
+                Log(startTime, contentId, "Exception handling request: " + e.Message);
                 context.Response.StatusCode = 500;
                 context.Response.OutputStream.Close();
                 context.Response.Close();
             }
         }
 
-        private void Log(string contentId, string method, Uri url, MemoryStream requestBody, int statusCode, MemoryStream responseBody, int responseTimeMs)
+        private void Log(DateTime time, string contentId, string method, Uri url, MemoryStream requestBody, int statusCode, MemoryStream responseBody, int responseTimeMs)
         {
             var responseBodyString = TsvCompatible(Encoding.UTF8.GetString(responseBody.ToArray()));
             var statusCodeString = string.Format("HTTP {0}", statusCode);
-            Log(contentId, method, url, requestBody, statusCodeString, responseBodyString, responseTimeMs);
+            Log(time, contentId, method, url, requestBody, statusCodeString, responseBodyString, responseTimeMs);
         }
 
-        private void Log(string contentId, string method, Uri url, MemoryStream requestBody, string statusCodeString, string responseBodyString, int responseTimeMs)
+        private void Log(DateTime time, string contentId, string method, Uri url, MemoryStream requestBody, string statusCodeString, string responseBodyString, int responseTimeMs)
         {
             var requestBodyString = TsvCompatible(Encoding.UTF8.GetString(requestBody.ToArray()));
             var requestString = url.PathAndQuery;
@@ -139,7 +140,7 @@ namespace Logging3DproxyApp
                                         requestBodyString,
                                         statusCodeString, responseBodyString, responseTimeMs);
 
-            Log(contentId, logLine);
+            Log(time, contentId, logLine);
         }
 
         static readonly char[] OngewensteFiguren = { '\r', '\t', '\n' };
@@ -156,11 +157,11 @@ namespace Logging3DproxyApp
             return retVal;
         }
 
-        private void Log(string contentId, string logLine)
+        private void Log(DateTime time, string contentId, string logLine)
         {
             lock (this)
             {
-                var timeString = DateTime.Now.ToString("o");
+                var timeString = time.ToString("o");
                 var timedLogLine = string.Format("{0}\t{1}\r\n", timeString, logLine);
                 var perContentLogFile = Path.Combine(m_LogPath, contentId + ".log");
                 File.AppendAllText(perContentLogFile, timedLogLine);
