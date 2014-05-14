@@ -4,6 +4,9 @@ IF3DLoggingProxy
 IF3DLoggingProxy. Says it all.
 
 ## Changelog
+### 1.0.1.3
+Fix: Not logging entire <html> responses never got committed to source control and was gone. Built-in again.
+
 ### 1.0.1.2
 * Fix: The per-day logfile feature never got committed to source control and was gone. Built-in again.
 * Wrapped log writing in try/catch for improved reliability

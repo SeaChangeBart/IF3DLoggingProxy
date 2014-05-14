@@ -136,6 +136,9 @@ namespace Logging3DproxyApp
             var requestBodyString = TsvCompatible(Encoding.UTF8.GetString(requestBody.ToArray()));
             var requestString = url.PathAndQuery;
 
+            if (responseBodyString.StartsWith("<html>"))
+                responseBodyString = "<html>...";
+
             var logLine = string.Format("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}ms", contentId, method, requestString,
                                         requestBodyString,
                                         statusCodeString, responseBodyString, responseTimeMs);
