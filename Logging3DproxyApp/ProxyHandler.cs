@@ -29,7 +29,9 @@ namespace Logging3DproxyApp
                 Directory.CreateDirectory(m_LogPath);
             m_SharedLogFileTemplate = Path.Combine(m_LogPath, resource + "_{0:yyyyMMdd}.log");
             TimeoutInSeconds = 10;
-            StatusCodeOnTimeout = 503;
+            StatusCodeOnGetTimeout = 503;
+            StatusCodeOnPutPostTimeout = 503;
+            StatusCodeOnDeleteTimeout = 503;
         }
 
         public int TimeoutInSeconds { get; set; }
@@ -110,7 +112,7 @@ namespace Logging3DproxyApp
                     stopWatch.Stop();
                     Log(startTime, contentId, httpListenerRequest.HttpMethod, context.Request.Url, requestBody,
                         "Exception", e.Message, (int)stopWatch.ElapsedMilliseconds);
-                    context.Response.StatusCode = StatusCodeOnTimeout;
+                    context.Response.StatusCode = StatusCodeOnTimeout(webRequest.Method);
                 }
                 context.Response.OutputStream.Close();
                 context.Response.Close();
@@ -121,6 +123,20 @@ namespace Logging3DproxyApp
                 context.Response.StatusCode = 500;
                 context.Response.OutputStream.Close();
                 context.Response.Close();
+            }
+        }
+
+        private int StatusCodeOnTimeout(string method)
+        {
+            switch (method)
+            {
+                case "DELETE":
+                    return StatusCodeOnDeleteTimeout;
+                case "POST":
+                case "PUT":
+                    return StatusCodeOnPutPostTimeout;
+                default:
+                    return StatusCodeOnGetTimeout;
             }
         }
 
@@ -148,7 +164,9 @@ namespace Logging3DproxyApp
 
         static readonly char[] OngewensteFiguren = { '\r', '\t', '\n' };
         private readonly Action<string> m_Trace;
-        public int StatusCodeOnTimeout { get; set; }
+        public int StatusCodeOnGetTimeout { get; set; }
+        public int StatusCodeOnPutPostTimeout { get; set; }
+        public int StatusCodeOnDeleteTimeout { get; set; }
 
         private static string TsvCompatible(string rawString)
         {

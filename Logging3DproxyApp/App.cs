@@ -26,8 +26,20 @@ namespace Logging3DproxyApp
 
             if (Properties.Settings.Default.StatusCodeOnTimeout > 0)
             {
-                m_Handler1.StatusCodeOnTimeout = Properties.Settings.Default.StatusCodeOnTimeout;
-                m_Handler2.StatusCodeOnTimeout = Properties.Settings.Default.StatusCodeOnTimeout;
+                m_Handler1.StatusCodeOnGetTimeout = Properties.Settings.Default.StatusCodeOnTimeout;
+                m_Handler2.StatusCodeOnGetTimeout = Properties.Settings.Default.StatusCodeOnTimeout;
+            }
+
+            if (Properties.Settings.Default.StatusCodeOnPutPostTimeout > 0)
+            {
+                m_Handler1.StatusCodeOnPutPostTimeout = Properties.Settings.Default.StatusCodeOnPutPostTimeout;
+                m_Handler2.StatusCodeOnPutPostTimeout = Properties.Settings.Default.StatusCodeOnPutPostTimeout;
+            }
+
+            if (Properties.Settings.Default.StatusCodeOnDeleteTimeout > 0)
+            {
+                m_Handler1.StatusCodeOnDeleteTimeout = Properties.Settings.Default.StatusCodeOnDeleteTimeout;
+                m_Handler2.StatusCodeOnDeleteTimeout = Properties.Settings.Default.StatusCodeOnDeleteTimeout;
             }
         }
         public void Start()

@@ -26,5 +26,11 @@
     <Setting Name="StatusCodeOnTimeout" Type="System.Int32" Scope="User">
       <Value Profile="(Default)">503</Value>
     </Setting>
+    <Setting Name="StatusCodeOnPutPostTimeout" Type="System.Int32" Scope="User">
+      <Value Profile="(Default)">503</Value>
+    </Setting>
+    <Setting Name="StatusCodeOnDeleteTimeout" Type="System.Int32" Scope="User">
+      <Value Profile="(Default)">503</Value>
+    </Setting>
   </Settings>
 </SettingsFile>
