@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Text;
+using System.Threading;
 
 namespace Logging3DproxyApp
 {
@@ -32,6 +33,24 @@ namespace Logging3DproxyApp
             StatusCodeOnGetTimeout = 503;
             StatusCodeOnPutPostTimeout = 503;
             StatusCodeOnDeleteTimeout = 503;
+            m_MigrationMode = true;
+            m_MigrationThread = new Thread(() =>
+            {
+                var perContentLogFilesInLogDirDirectly = Directory.EnumerateFiles(m_LogPath, "*.log")
+                    .Select(Path.GetFileNameWithoutExtension)
+                    .Where(fn => !fn.StartsWith(resource));
+
+                while (perContentLogFilesInLogDirDirectly.Any())
+                {
+                    Console.WriteLine("Migration Run Starting");
+                    foreach (var contentId in perContentLogFilesInLogDirDirectly)
+                        TryMigrate(contentId, PerContentLogFile(contentId));
+                    Console.WriteLine("Migration Run Completed");
+                }
+                Console.WriteLine("Migration Completed or Unnecessary");
+                m_MigrationMode = false;
+            }) {Priority = ThreadPriority.BelowNormal};
+            m_MigrationThread.Start();
         }
 
         public int TimeoutInSeconds { get; set; }
@@ -164,6 +183,8 @@ namespace Logging3DproxyApp
 
         static readonly char[] OngewensteFiguren = { '\r', '\t', '\n' };
         private readonly Action<string> m_Trace;
+        private bool m_MigrationMode;
+        private Thread m_MigrationThread;
         public int StatusCodeOnGetTimeout { get; set; }
         public int StatusCodeOnPutPostTimeout { get; set; }
         public int StatusCodeOnDeleteTimeout { get; set; }
@@ -184,12 +205,51 @@ namespace Logging3DproxyApp
             {
                 var timeString = time.ToString("o");
                 var timedLogLine = string.Format("{0}\t{1}\r\n", timeString, logLine);
-                var perContentLogFile = Path.Combine(m_LogPath, contentId + ".log");
+                var perContentLogFile = PerContentLogFile(contentId);
+                if (m_MigrationMode)
+                    TryMigrate(contentId, perContentLogFile);
                 var perDayLogFile = string.Format(m_SharedLogFileTemplate, time);
                 TryRetry(() => File.AppendAllText(perContentLogFile, timedLogLine), 3);
                 TryRetry(() => File.AppendAllText(perDayLogFile, timedLogLine), 3);
                 m_Trace(logLine);
             }
+        }
+
+        private void TryMigrate(string contentId, string perContentLogFile)
+        {
+            lock (this)
+                try
+                {
+                    if (File.Exists(perContentLogFile))
+                        return;
+                    var oldFile = OldPerContentLogFile(contentId);
+                    if (!File.Exists(oldFile))
+                        return;
+                    File.Move(oldFile, perContentLogFile);
+
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine("Couldn't move old log to new log {1}: {0}", e.Message, perContentLogFile);
+                }
+        }
+
+        private string OldPerContentLogFile(string contentId)
+        {
+            return Path.Combine(m_LogPath, contentId + ".log");
+        }
+
+        private string PerContentLogFile(string contentId)
+        {
+            var dir = PerContentLogDir(contentId);
+            if (!Directory.Exists(dir))
+                Directory.CreateDirectory(dir);
+            return Path.Combine(dir, contentId + ".log");
+        }
+
+        private string PerContentLogDir(string contentId)
+        {
+            return Path.Combine(m_LogPath, contentId.Substring(0, 2), contentId.Substring(0, 4));
         }
 
         private bool TryRetry(Action what, int howOften)
