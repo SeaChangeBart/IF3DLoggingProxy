@@ -44,13 +44,26 @@ namespace Logging3DproxyApp
                 {
                     Console.WriteLine("Migration Run Starting");
                     foreach (var contentId in perContentLogFilesInLogDirDirectly)
-                        TryMigrate(contentId, PerContentLogFile(contentId));
+                        TryMigrate(contentId);
                     Console.WriteLine("Migration Run Completed");
                 }
                 Console.WriteLine("Migration Completed or Unnecessary");
                 m_MigrationMode = false;
             }) {Priority = ThreadPriority.BelowNormal};
             m_MigrationThread.Start();
+        }
+
+        private void TryMigrate(string contentId)
+        {
+            try
+            {
+                var newPath = PerContentLogFile(contentId);
+                TryMigrate(contentId, newPath);
+            }
+            catch (Exception e)
+            {
+                Console.Error.WriteLine("Migration Error for {0}: {1}", contentId, e.Message);
+            }
         }
 
         public int TimeoutInSeconds { get; set; }
@@ -249,7 +262,9 @@ namespace Logging3DproxyApp
 
         private string PerContentLogDir(string contentId)
         {
-            return Path.Combine(m_LogPath, contentId.Substring(0, 2), contentId.Substring(0, 4));
+            return contentId.Length > 8
+                ? Path.Combine(m_LogPath, contentId.Substring(0, 2), contentId.Substring(0, 4))
+                : m_LogPath;
         }
 
         private bool TryRetry(Action what, int howOften)

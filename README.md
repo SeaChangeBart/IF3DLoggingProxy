@@ -4,6 +4,13 @@ IF3DLoggingProxy
 IF3DLoggingProxy. Says it all.
 
 ## Changelog
+### 1.0.2.1
+Fix: Only place long (>8) contentIds in subfolders; try-catch in migration scenario
+
+### 1.0.2.0
+Change: Place assets in folders based on prefix (STBTS\01\010a\010a49a8sd.log)
+Change: Separate return codes for GET, POST/PUT and DELETE timeouts (must adapt config!)
+
 ### 1.0.1.3
 Fix: Not logging entire <html> responses never got committed to source control and was gone. Built-in again.
 
