@@ -10,9 +10,9 @@ namespace Logging3DproxyApp
 {
     public class ProxyHandler : HttpRequestHandler
     {
+        private readonly log4net.ILog _logger;
         private readonly string m_EndPoint;
         private readonly string m_LogPath;
-        private readonly string m_SharedLogFileTemplate;
 
         private static string[] Prefixes(short port, string resource)
         {
@@ -20,15 +20,24 @@ namespace Logging3DproxyApp
             return new[] {prefix};
         }
 
-        public ProxyHandler(short port, string resource, string endPoint, string logPath, Action<string> trace)
+        private void Debug(string msg)
+        {
+            _logger.Debug(msg);
+        }
+
+        private void Debug(string msg, params object[] prm)
+        {
+            _logger.DebugFormat(msg, prm);
+        }
+
+        public ProxyHandler(short port, string resource, string endPoint, string logPath)
             : base(Prefixes(port, resource))
         {
+            _logger = log4net.LogManager.GetLogger("Handler." + resource);
             m_EndPoint = endPoint;
             m_LogPath = logPath;
-            m_Trace = trace;
             if (!Directory.Exists(m_LogPath))
                 Directory.CreateDirectory(m_LogPath);
-            m_SharedLogFileTemplate = Path.Combine(m_LogPath, resource + "_{0:yyyyMMdd}.log");
             TimeoutInSeconds = 10;
             StatusCodeOnGetTimeout = 503;
             StatusCodeOnPutPostTimeout = 503;
@@ -42,12 +51,12 @@ namespace Logging3DproxyApp
 
                 while (perContentLogFilesInLogDirDirectly.Any())
                 {
-                    Console.WriteLine("Migration Run Starting");
+                    Debug("Migration Run Starting");
                     foreach (var contentId in perContentLogFilesInLogDirDirectly)
                         TryMigrate(contentId);
-                    Console.WriteLine("Migration Run Completed");
+                    Debug("Migration Run Completed");
                 }
-                Console.WriteLine("Migration Completed or Unnecessary");
+                Debug("Migration Completed or Unnecessary");
                 m_MigrationMode = false;
             }) {Priority = ThreadPriority.BelowNormal};
             m_MigrationThread.Start();
@@ -62,7 +71,7 @@ namespace Logging3DproxyApp
             }
             catch (Exception e)
             {
-                Console.Error.WriteLine("Migration Error for {0}: {1}", contentId, e.Message);
+                Debug("Migration Error for {0}: {1}", contentId, e.Message);
             }
         }
 
@@ -78,7 +87,7 @@ namespace Logging3DproxyApp
 
             try
             {
-                m_Trace(httpListenerRequest.Url.PathAndQuery);
+                Debug("Received {0} {1}", httpListenerRequest.HttpMethod, httpListenerRequest.Url.PathAndQuery);
                 var actualResource = string.Concat(httpListenerRequest.Url.Segments.Skip(2));
                 var urlToCall = m_EndPoint + actualResource;
 
@@ -92,10 +101,8 @@ namespace Logging3DproxyApp
                 var requestBody = new MemoryStream();
                 if (httpListenerRequest.HasEntityBody)
                 {
-                    m_Trace("Copying stream");
                     httpListenerRequest.InputStream.CopyTo(requestBody);
                     requestBody.Seek(0, SeekOrigin.Begin);
-                    m_Trace("Copying stream 2");
                     requestBody.CopyTo(webRequest.GetRequestStream());
                 }
 
@@ -107,12 +114,11 @@ namespace Logging3DproxyApp
                     HttpWebResponse webResponse;
                     try
                     {
-                        m_Trace("Calling");
+                        Debug("Calling {0} {1}", webRequest.Method, webRequest.RequestUri);
                         webResponse = (HttpWebResponse) webRequest.GetResponse();
                     }
                     catch (WebException webEx)
                     {
-                        m_Trace("WebEx");
                         webResponse = (HttpWebResponse) webEx.Response;
                         if (webResponse == null)
                             throw;
@@ -195,7 +201,7 @@ namespace Logging3DproxyApp
         }
 
         static readonly char[] OngewensteFiguren = { '\r', '\t', '\n' };
-        private readonly Action<string> m_Trace;
+
         private bool m_MigrationMode;
         private Thread m_MigrationThread;
         public int StatusCodeOnGetTimeout { get; set; }
@@ -217,14 +223,12 @@ namespace Logging3DproxyApp
             lock (this)
             {
                 var timeString = time.ToString("o");
-                var timedLogLine = string.Format("{0}\t{1}\r\n", timeString, logLine);
+                var timedLogMessage = string.Format("{0}\t{1}", timeString, logLine);
                 var perContentLogFile = PerContentLogFile(contentId);
                 if (m_MigrationMode)
                     TryMigrate(contentId, perContentLogFile);
-                var perDayLogFile = string.Format(m_SharedLogFileTemplate, time);
-                TryRetry(() => File.AppendAllText(perContentLogFile, timedLogLine), 3);
-                TryRetry(() => File.AppendAllText(perDayLogFile, timedLogLine), 3);
-                m_Trace(logLine);
+                _logger.Info(timedLogMessage);
+                TryRetry(() => File.AppendAllLines(perContentLogFile, new []{timedLogMessage}), 3);
             }
         }
 
@@ -239,11 +243,12 @@ namespace Logging3DproxyApp
                     if (!File.Exists(oldFile))
                         return;
                     File.Move(oldFile, perContentLogFile);
+                    Debug("Migrated " + oldFile);
 
                 }
                 catch (Exception e)
                 {
-                    Console.WriteLine("Couldn't move old log to new log {1}: {0}", e.Message, perContentLogFile);
+                    _logger.ErrorFormat("Couldn't move old log to new log {1}: {0}", e.Message, perContentLogFile);
                 }
         }
 

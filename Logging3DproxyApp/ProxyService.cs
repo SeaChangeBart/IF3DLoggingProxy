@@ -13,7 +13,7 @@ namespace Logging3DproxyApp
 
         protected override void OnStart(string[] args)
         {
-            m_App = new App(_ => { });
+            m_App = new App();
             m_App.Start();
         }
 

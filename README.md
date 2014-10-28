@@ -4,6 +4,9 @@ IF3DLoggingProxy
 IF3DLoggingProxy. Says it all.
 
 ## Changelog
+### 1.0.3.0
+Use log4net for per-handler (and general error) logging (gives syslog output option)
+
 ### 1.0.2.1
 Fix: Only place long (>8) contentIds in subfolders; try-catch in migration scenario
 
