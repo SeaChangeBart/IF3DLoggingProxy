@@ -3,8 +3,11 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace Logging3DproxyApp
 {
@@ -110,65 +113,82 @@ namespace Logging3DproxyApp
             {
                 Debug("Received {0} {1}", httpListenerRequest.HttpMethod, httpListenerRequest.Url.PathAndQuery);
                 var actualResource = string.Concat(httpListenerRequest.Url.Segments.Skip(2));
-                var urlToCall = m_EndPoint + actualResource;
+                var urlToCall = new Uri(m_EndPoint + actualResource);
 
-                using (var webClient = new MyWebClient(TimeoutInSeconds*1000))
+                using (var webClient = new HttpClient())
                 {
-                    //webClient.Headers.Add(HttpRequestHeader.ContentType, httpListenerRequest.ContentType);
-                    webClient.Headers.Add(httpListenerRequest.Headers);
-
-                    MemoryStream requestBody = null;
-                    if (httpListenerRequest.HasEntityBody)
+                    using (var requestMessage = new HttpRequestMessage())
                     {
-                        requestBody = new MemoryStream();
-                        httpListenerRequest.InputStream.CopyTo(requestBody);
-                        requestBody.Seek(0, SeekOrigin.Begin);
-                    }
+                        webClient.Timeout = TimeSpan.FromSeconds(TimeoutInSeconds);
+                        webClient.MaxResponseContentBufferSize = 10000000;
+                        requestMessage.Method = GetMethod(httpListenerRequest.HttpMethod);
+                        requestMessage.RequestUri = urlToCall;
 
-                    var stopWatch = new Stopwatch();
-                    stopWatch.Start();
-
-                    try
-                    {
-                        var responseData = new byte[0];
-                        try
+                        var requestBytes = new byte[0];
+                        if (httpListenerRequest.HasEntityBody)
                         {
-                            Debug("Calling {0} {1}", httpListenerRequest.HttpMethod, urlToCall);
-                            responseData = requestBody != null
-                                ? webClient.UploadData(urlToCall, httpListenerRequest.HttpMethod, requestBody.ToArray())
-                                : webClient.DownloadData(urlToCall);
-                            stopWatch.Stop();
-                        }
-                        catch (WebException webEx)
-                        {
-                            var webResponse = (HttpWebResponse) webEx.Response;
-                            if (webResponse == null)
-                                throw;
-                            context.Response.StatusCode = (int)webResponse.StatusCode;
-                        }
-                        context.Response.ContentLength64 = responseData.Length;
-                        if (webClient.ResponseHeaders != null)
-                        {
-                            if (
-                                webClient.ResponseHeaders.AllKeys.Any(
-                                    k => k.Equals("Content-Type", StringComparison.InvariantCultureIgnoreCase)))
+                            using (var requestBodyS = new MemoryStream())
                             {
-                                context.Response.ContentType =
-                                    webClient.ResponseHeaders[HttpResponseHeader.ContentType];
+                                httpListenerRequest.InputStream.CopyTo(requestBodyS);
+                                requestBodyS.Seek(0, SeekOrigin.Begin);
+                                requestBytes = requestBodyS.ToArray();
+                                requestMessage.Content = new ByteArrayContent(requestBytes);
+                                if (httpListenerRequest.ContentType != null)
+                                    requestMessage.Content.Headers.ContentType =
+                                        new MediaTypeHeaderValue(httpListenerRequest.ContentType);
                             }
                         }
 
-                        context.Response.OutputStream.Write(responseData, 0, responseData.Length);
+                        var stopWatch = new Stopwatch();
+                        stopWatch.Start();
 
-                        Log(startTime, contentId, httpListenerRequest.HttpMethod, context.Request.Url, requestBody,
-                            context.Response.StatusCode, responseData, (int)stopWatch.ElapsedMilliseconds);
-                    }
-                    catch (Exception e)
-                    {
-                        stopWatch.Stop();
-                        Log(startTime, contentId, httpListenerRequest.HttpMethod, context.Request.Url, requestBody,
-                            "Exception", e.Message, (int) stopWatch.ElapsedMilliseconds);
-                        context.Response.StatusCode = StatusCodeOnTimeout(httpListenerRequest.HttpMethod);
+                        try
+                        {
+                            try
+                            {
+                                Debug("Calling {0} {1}", requestMessage.Method, urlToCall);
+                                var responseMessageTask = webClient.SendAsync(requestMessage,
+                                    HttpCompletionOption.ResponseHeadersRead);
+
+                                responseMessageTask.Wait();
+                                var responseMessage = responseMessageTask.Result;
+                                stopWatch.Stop();
+
+                                context.Response.StatusCode = (int) responseMessage.StatusCode;
+                                var responseContent = responseMessage.Content;
+                                var responseData = new byte[0];
+                                if (responseContent != null)
+                                {
+                                    var byteTask = responseContent.ReadAsByteArrayAsync();
+                                    byteTask.Wait(TimeoutInSeconds);
+                                    responseData = byteTask.Result;
+                                    context.Response.ContentLength64 = responseData.Length;
+                                    context.Response.OutputStream.Write(responseData,0,responseData.Length);
+                                    context.Response.ContentType = responseContent.Headers.ContentType.ToString();
+                                }
+
+                                Log(startTime, contentId, httpListenerRequest.HttpMethod, urlToCall, requestBytes,
+                                    context.Response.StatusCode, responseData, (int) stopWatch.ElapsedMilliseconds);
+                            }
+                            catch (AggregateException ae)
+                            {
+                                throw ae.Flatten().InnerExceptions.First();
+                            }
+                        }
+                        catch (TaskCanceledException)
+                        {
+                            stopWatch.Stop();
+                            Log(startTime, contentId, httpListenerRequest.HttpMethod, urlToCall, requestBytes,
+                                "Exception", "The operation has timed out", (int)stopWatch.ElapsedMilliseconds);
+                            context.Response.StatusCode = StatusCodeOnTimeout(httpListenerRequest.HttpMethod);
+                        }
+                        catch (Exception e)
+                        {
+                            stopWatch.Stop();
+                            Log(startTime, contentId, httpListenerRequest.HttpMethod, urlToCall, requestBytes,
+                                "Exception", e.Message, (int) stopWatch.ElapsedMilliseconds);
+                            context.Response.StatusCode = StatusCodeOnTimeout(httpListenerRequest.HttpMethod);
+                        }
                     }
                 }
                 context.Response.OutputStream.Close();
@@ -180,6 +200,28 @@ namespace Logging3DproxyApp
                 context.Response.StatusCode = 500;
                 context.Response.OutputStream.Close();
                 context.Response.Close();
+            }
+        }
+
+        private HttpMethod GetMethod(string httpMethod)
+        {
+            switch (httpMethod)
+            {
+                default:
+                case "GET":
+                    return HttpMethod.Get;
+                case "DELETE":
+                    return HttpMethod.Delete;
+                case "PUT":
+                    return HttpMethod.Put;
+                case "POST":
+                    return HttpMethod.Post;
+                case "HEAD":
+                    return HttpMethod.Head;
+                case "TRACE":
+                    return HttpMethod.Trace;
+                case "OPTIONS":
+                    return HttpMethod.Trace;
             }
         }
 
@@ -197,22 +239,29 @@ namespace Logging3DproxyApp
             }
         }
 
-        private void Log(DateTime time, string contentId, string method, Uri url, MemoryStream requestBody, int statusCode, byte[] responseBody, int responseTimeMs)
+        private void Log(DateTime time, string contentId, string method, Uri url, byte[] requestBody, int statusCode, byte[] responseBody, int responseTimeMs)
         {
             var responseBodyString = TsvCompatible(Encoding.UTF8.GetString(responseBody));
             var statusCodeString = string.Format("HTTP {0}", statusCode);
             Log(time, contentId, method, url, requestBody, statusCodeString, responseBodyString, responseTimeMs);
         }
 
-        private void Log(DateTime time, string contentId, string method, Uri url, MemoryStream requestBody, string statusCodeString, string responseBodyString, int responseTimeMs)
+        private void Log(DateTime time, string contentId, string method, Uri url, byte[] requestBody, string statusCodeString, string responseBodyString, int responseTimeMs)
         {
             if (requestBody == null)
-                requestBody = new MemoryStream();
-            var requestBodyString = TsvCompatible(Encoding.UTF8.GetString(requestBody.ToArray()));
+                requestBody = new byte[0];
+            var requestBodyString = TsvCompatible(Encoding.UTF8.GetString(requestBody));
+
             var requestString = url.PathAndQuery;
 
             if (responseBodyString.StartsWith("<html>"))
                 responseBodyString = "<html>...";
+
+            if (requestBodyString.Length > 1000)
+                requestBodyString = requestBodyString.Substring(0, 1000);
+
+            if (responseBodyString.Length > 1000)
+                responseBodyString = responseBodyString.Substring(0, 1000);
 
             var logLine = string.Format("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}ms", contentId, method, requestString,
                                         requestBodyString,

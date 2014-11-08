@@ -4,6 +4,9 @@ IF3DLoggingProxy
 IF3DLoggingProxy. Says it all.
 
 ## Changelog
+### 1.0.4.0
+FIXED: 1.0.3.2 broke the release; Moved to new Http Libraries to fix.
+
 ### 1.0.3.3
 FIXED: Use the >8 logic also when detecting whether to migrate or not (led to racing startup sequence)
 
