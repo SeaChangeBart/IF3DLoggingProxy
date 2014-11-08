@@ -77,6 +77,26 @@ namespace Logging3DproxyApp
 
         public int TimeoutInSeconds { get; set; }
 
+        class MyWebClient : WebClient
+        {
+            private readonly int _timeoutInMs;
+
+            public MyWebClient(int timeoutInMs)
+            {
+                _timeoutInMs = timeoutInMs;
+            }
+
+            protected override WebRequest GetWebRequest(Uri address)
+            {
+                var request = base.GetWebRequest(address);
+                if (request == null)
+                    return null;
+
+                request.Timeout = _timeoutInMs;
+                return request;
+            }
+        }
+
         protected override void DoHandleRequest(HttpListenerContext context)
         {
             var startTime = DateTime.UtcNow;
@@ -91,68 +111,64 @@ namespace Logging3DproxyApp
                 var actualResource = string.Concat(httpListenerRequest.Url.Segments.Skip(2));
                 var urlToCall = m_EndPoint + actualResource;
 
-                var webRequest = WebRequest.Create(urlToCall);
-                webRequest.Timeout = TimeoutInSeconds * 1000;
-                webRequest.Method = httpListenerRequest.HttpMethod;
-
-                webRequest.ContentLength = httpListenerRequest.ContentLength64;
-                webRequest.ContentType = httpListenerRequest.ContentType;
-
-                var requestBody = new MemoryStream();
-                if (httpListenerRequest.HasEntityBody)
+                using (var webClient = new MyWebClient(TimeoutInSeconds*1000))
                 {
-                    httpListenerRequest.InputStream.CopyTo(requestBody);
-                    requestBody.Seek(0, SeekOrigin.Begin);
-                    requestBody.CopyTo(webRequest.GetRequestStream());
-                }
+                    //webClient.Headers.Add(HttpRequestHeader.ContentType, httpListenerRequest.ContentType);
+                    webClient.Headers.Add(httpListenerRequest.Headers);
 
-                var stopWatch = new Stopwatch();
-                stopWatch.Start();
+                    MemoryStream requestBody = null;
+                    if (httpListenerRequest.HasEntityBody)
+                    {
+                        requestBody = new MemoryStream();
+                        httpListenerRequest.InputStream.CopyTo(requestBody);
+                        requestBody.Seek(0, SeekOrigin.Begin);
+                    }
 
-                try
-                {
-                    HttpWebResponse webResponse;
+                    var stopWatch = new Stopwatch();
+                    stopWatch.Start();
+
                     try
                     {
-                        Debug("Calling {0} {1}", webRequest.Method, webRequest.RequestUri);
-                        webResponse = (HttpWebResponse) webRequest.GetResponse();
-                    }
-                    catch (WebException webEx)
-                    {
-                        webResponse = (HttpWebResponse) webEx.Response;
-                        if (webResponse == null)
-                            throw;
-                        context.Response.StatusCode = (int) webResponse.StatusCode;
-                    }
-                    using (webResponse)
-                    {
-                        context.Response.ContentLength64 = webResponse.ContentLength;
-                        context.Response.ContentType = webResponse.ContentType;
-
-                        var responseBody = new MemoryStream();
-                        var responseStream = webResponse.GetResponseStream();
-                        if (responseStream != null)
+                        var responseData = new byte[0];
+                        try
                         {
-                            responseStream.CopyTo(responseBody);
-                            responseBody.Seek(0, SeekOrigin.Begin);
-                            responseBody.CopyTo(context.Response.OutputStream);
-                            responseStream.Close();
+                            Debug("Calling {0} {1}", httpListenerRequest.HttpMethod, urlToCall);
+                            responseData = requestBody != null
+                                ? webClient.UploadData(urlToCall, httpListenerRequest.HttpMethod, requestBody.ToArray())
+                                : webClient.DownloadData(urlToCall);
+                            stopWatch.Stop();
+                        }
+                        catch (WebException webEx)
+                        {
+                            var webResponse = (HttpWebResponse) webEx.Response;
+                            if (webResponse == null)
+                                throw;
+                            context.Response.StatusCode = (int)webResponse.StatusCode;
+                        }
+                        context.Response.ContentLength64 = responseData.Length;
+                        if (webClient.ResponseHeaders != null)
+                        {
+                            if (
+                                webClient.ResponseHeaders.AllKeys.Any(
+                                    k => k.Equals("Content-Type", StringComparison.InvariantCultureIgnoreCase)))
+                            {
+                                context.Response.ContentType =
+                                    webClient.ResponseHeaders[HttpResponseHeader.ContentType];
+                            }
                         }
 
-                        stopWatch.Stop();
+                        context.Response.OutputStream.Write(responseData, 0, responseData.Length);
 
                         Log(startTime, contentId, httpListenerRequest.HttpMethod, context.Request.Url, requestBody,
-                            context.Response.StatusCode, responseBody, (int) stopWatch.ElapsedMilliseconds);
-
-                        webResponse.Close();
+                            context.Response.StatusCode, responseData, (int)stopWatch.ElapsedMilliseconds);
                     }
-                }
-                catch (Exception e)
-                {
-                    stopWatch.Stop();
-                    Log(startTime, contentId, httpListenerRequest.HttpMethod, context.Request.Url, requestBody,
-                        "Exception", e.Message, (int)stopWatch.ElapsedMilliseconds);
-                    context.Response.StatusCode = StatusCodeOnTimeout(webRequest.Method);
+                    catch (Exception e)
+                    {
+                        stopWatch.Stop();
+                        Log(startTime, contentId, httpListenerRequest.HttpMethod, context.Request.Url, requestBody,
+                            "Exception", e.Message, (int) stopWatch.ElapsedMilliseconds);
+                        context.Response.StatusCode = StatusCodeOnTimeout(httpListenerRequest.HttpMethod);
+                    }
                 }
                 context.Response.OutputStream.Close();
                 context.Response.Close();
@@ -180,15 +196,17 @@ namespace Logging3DproxyApp
             }
         }
 
-        private void Log(DateTime time, string contentId, string method, Uri url, MemoryStream requestBody, int statusCode, MemoryStream responseBody, int responseTimeMs)
+        private void Log(DateTime time, string contentId, string method, Uri url, MemoryStream requestBody, int statusCode, byte[] responseBody, int responseTimeMs)
         {
-            var responseBodyString = TsvCompatible(Encoding.UTF8.GetString(responseBody.ToArray()));
+            var responseBodyString = TsvCompatible(Encoding.UTF8.GetString(responseBody));
             var statusCodeString = string.Format("HTTP {0}", statusCode);
             Log(time, contentId, method, url, requestBody, statusCodeString, responseBodyString, responseTimeMs);
         }
 
         private void Log(DateTime time, string contentId, string method, Uri url, MemoryStream requestBody, string statusCodeString, string responseBodyString, int responseTimeMs)
         {
+            if (requestBody == null)
+                requestBody = new MemoryStream();
             var requestBodyString = TsvCompatible(Encoding.UTF8.GetString(requestBody.ToArray()));
             var requestString = url.PathAndQuery;
 

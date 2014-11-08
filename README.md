@@ -4,6 +4,9 @@ IF3DLoggingProxy
 IF3DLoggingProxy. Says it all.
 
 ## Changelog
+### 1.0.3.2
+Added Chunked support (by moving to WebClient instead of WebRequest)
+
 ### 1.0.3.1
 FIXED: When an Exception happened during processing the webResponse, it wasn't disposed and the connection would stay open, causing all further requests to be stalled and timeing out.
 Note that this happened for all requests resulting in a CHUNKED response. This still doesn't work (503 response) but won't break Proxy anymore.
