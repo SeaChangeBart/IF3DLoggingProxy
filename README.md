@@ -4,6 +4,9 @@ IF3DLoggingProxy
 IF3DLoggingProxy. Says it all.
 
 ## Changelog
+### 1.0.4.1
+FIXED: MaxResponseContentBufferSize has issues between .net 4.0 and .net 4.5 - removed.
+
 ### 1.0.4.0
 FIXED: 1.0.3.2 broke the release; Moved to new Http Libraries to fix.
 

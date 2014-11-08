@@ -81,7 +81,7 @@ namespace Logging3DproxyApp
 
         public int TimeoutInSeconds { get; set; }
 
-        class MyWebClient : WebClient
+        private class MyWebClient : WebClient
         {
             private readonly int _timeoutInMs;
 
@@ -120,7 +120,6 @@ namespace Logging3DproxyApp
                     using (var requestMessage = new HttpRequestMessage())
                     {
                         webClient.Timeout = TimeSpan.FromSeconds(TimeoutInSeconds);
-                        webClient.MaxResponseContentBufferSize = 10000000;
                         requestMessage.Method = GetMethod(httpListenerRequest.HttpMethod);
                         requestMessage.RequestUri = urlToCall;
 
@@ -148,7 +147,7 @@ namespace Logging3DproxyApp
                             {
                                 Debug("Calling {0} {1}", requestMessage.Method, urlToCall);
                                 var responseMessageTask = webClient.SendAsync(requestMessage,
-                                    HttpCompletionOption.ResponseHeadersRead);
+                                    HttpCompletionOption.ResponseContentRead);
 
                                 responseMessageTask.Wait();
                                 var responseMessage = responseMessageTask.Result;
@@ -159,12 +158,19 @@ namespace Logging3DproxyApp
                                 var responseData = new byte[0];
                                 if (responseContent != null)
                                 {
-                                    var byteTask = responseContent.ReadAsByteArrayAsync();
-                                    byteTask.Wait(TimeoutInSeconds);
-                                    responseData = byteTask.Result;
-                                    context.Response.ContentLength64 = responseData.Length;
-                                    context.Response.OutputStream.Write(responseData,0,responseData.Length);
-                                    context.Response.ContentType = responseContent.Headers.ContentType.ToString();
+                                    using (var ms = new MemoryStream())
+                                    {
+                                        responseContent.CopyToAsync(ms).Wait(TimeoutInSeconds);
+                                        ms.Seek(0, SeekOrigin.Begin);
+                                        responseData = ms.ToArray();
+
+                                        if (responseContent.Headers != null && responseContent.Headers.ContentType!=null)
+                                            context.Response.ContentType = responseContent.Headers.ContentType.ToString();
+
+                                        context.Response.ContentLength64 = responseData.Length;
+                                        ms.Seek(0, SeekOrigin.Begin);
+                                        ms.CopyTo(context.Response.OutputStream);
+                                    }
                                 }
 
                                 Log(startTime, contentId, httpListenerRequest.HttpMethod, urlToCall, requestBytes,
@@ -179,7 +185,7 @@ namespace Logging3DproxyApp
                         {
                             stopWatch.Stop();
                             Log(startTime, contentId, httpListenerRequest.HttpMethod, urlToCall, requestBytes,
-                                "Exception", "The operation has timed out", (int)stopWatch.ElapsedMilliseconds);
+                                "Exception", "The operation has timed out", (int) stopWatch.ElapsedMilliseconds);
                             context.Response.StatusCode = StatusCodeOnTimeout(httpListenerRequest.HttpMethod);
                         }
                         catch (Exception e)
@@ -188,6 +194,7 @@ namespace Logging3DproxyApp
                             Log(startTime, contentId, httpListenerRequest.HttpMethod, urlToCall, requestBytes,
                                 "Exception", e.Message, (int) stopWatch.ElapsedMilliseconds);
                             context.Response.StatusCode = StatusCodeOnTimeout(httpListenerRequest.HttpMethod);
+                            Debug(e.ToString());
                         }
                     }
                 }
@@ -200,6 +207,7 @@ namespace Logging3DproxyApp
                 context.Response.StatusCode = 500;
                 context.Response.OutputStream.Close();
                 context.Response.Close();
+                Debug(e.ToString());
             }
         }
 
@@ -239,14 +247,16 @@ namespace Logging3DproxyApp
             }
         }
 
-        private void Log(DateTime time, string contentId, string method, Uri url, byte[] requestBody, int statusCode, byte[] responseBody, int responseTimeMs)
+        private void Log(DateTime time, string contentId, string method, Uri url, byte[] requestBody, int statusCode,
+            byte[] responseBody, int responseTimeMs)
         {
             var responseBodyString = TsvCompatible(Encoding.UTF8.GetString(responseBody));
             var statusCodeString = string.Format("HTTP {0}", statusCode);
             Log(time, contentId, method, url, requestBody, statusCodeString, responseBodyString, responseTimeMs);
         }
 
-        private void Log(DateTime time, string contentId, string method, Uri url, byte[] requestBody, string statusCodeString, string responseBodyString, int responseTimeMs)
+        private void Log(DateTime time, string contentId, string method, Uri url, byte[] requestBody,
+            string statusCodeString, string responseBodyString, int responseTimeMs)
         {
             if (requestBody == null)
                 requestBody = new byte[0];
@@ -264,13 +274,13 @@ namespace Logging3DproxyApp
                 responseBodyString = responseBodyString.Substring(0, 1000);
 
             var logLine = string.Format("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}ms", contentId, method, requestString,
-                                        requestBodyString,
-                                        statusCodeString, responseBodyString, responseTimeMs);
+                requestBodyString,
+                statusCodeString, responseBodyString, responseTimeMs);
 
             Log(time, contentId, logLine);
         }
 
-        static readonly char[] OngewensteFiguren = { '\r', '\t', '\n' };
+        private static readonly char[] OngewensteFiguren = {'\r', '\t', '\n'};
 
         private bool m_MigrationMode;
         private Thread m_MigrationThread;
@@ -298,7 +308,7 @@ namespace Logging3DproxyApp
                 if (m_MigrationMode)
                     TryMigrate(contentId, perContentLogFile);
                 _logger.Info(timedLogMessage);
-                TryRetry(() => File.AppendAllLines(perContentLogFile, new []{timedLogMessage}), 3);
+                TryRetry(() => File.AppendAllLines(perContentLogFile, new[] {timedLogMessage}), 3);
             }
         }
 
