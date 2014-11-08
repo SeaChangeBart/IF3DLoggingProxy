@@ -47,6 +47,7 @@ namespace Logging3DproxyApp
             {
                 var perContentLogFilesInLogDirDirectly = Directory.EnumerateFiles(m_LogPath, "*.log")
                     .Select(Path.GetFileNameWithoutExtension)
+                    .Where(id => id.Length > 8)
                     .Where(fn => !fn.StartsWith(resource));
 
                 while (perContentLogFilesInLogDirDirectly.Any())

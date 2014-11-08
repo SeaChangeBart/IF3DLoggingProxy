@@ -4,6 +4,9 @@ IF3DLoggingProxy
 IF3DLoggingProxy. Says it all.
 
 ## Changelog
+### 1.0.3.3
+FIXED: Use the >8 logic also when detecting whether to migrate or not (led to racing startup sequence)
+
 ### 1.0.3.2
 Added Chunked support (by moving to WebClient instead of WebRequest)
 
