@@ -119,25 +119,28 @@ namespace Logging3DproxyApp
                         context.Response.StatusCode = (int) webResponse.StatusCode;
                     }
 
-                    context.Response.ContentLength64 = webResponse.ContentLength;
-                    context.Response.ContentType = webResponse.ContentType;
-
-                    var responseBody = new MemoryStream();
-                    var responseStream = webResponse.GetResponseStream();
-                    if (responseStream != null)
+                    using (webResponse)
                     {
-                        responseStream.CopyTo(responseBody);
-                        responseBody.Seek(0, SeekOrigin.Begin);
-                        responseBody.CopyTo(context.Response.OutputStream);
-                        responseStream.Close();
+                        context.Response.ContentLength64 = webResponse.ContentLength;
+                        context.Response.ContentType = webResponse.ContentType;
+
+                        var responseBody = new MemoryStream();
+                        var responseStream = webResponse.GetResponseStream();
+                        if (responseStream != null)
+                        {
+                            responseStream.CopyTo(responseBody);
+                            responseBody.Seek(0, SeekOrigin.Begin);
+                            responseBody.CopyTo(context.Response.OutputStream);
+                            responseStream.Close();
+                        }
+
+                        stopWatch.Stop();
+
+                        Log(startTime, contentId, httpListenerRequest.HttpMethod, context.Request.Url, requestBody,
+                            context.Response.StatusCode, responseBody, (int) stopWatch.ElapsedMilliseconds);
+
+                        webResponse.Close();
                     }
-
-                    stopWatch.Stop();
-
-                    Log(startTime, contentId, httpListenerRequest.HttpMethod, context.Request.Url, requestBody,
-                        context.Response.StatusCode, responseBody, (int)stopWatch.ElapsedMilliseconds);
-
-                    webResponse.Close();
                 }
                 catch (Exception e)
                 {
